@@ -13,7 +13,7 @@ def main():
     dZ = 1.0;
     dYaw = np.pi/2.0*0;
     dT = 2.0;
-    nreps = 3;
+    nreps = 1;
     
     swarm = Crazyswarm()
     timeHelper = swarm.timeHelper

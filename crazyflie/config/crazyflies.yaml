@@ -75,28 +75,26 @@ all:
   # firmware logging for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
   firmware_logging:
-    enabled: false
-    default_topics:
+    enabled: true
+    #default_topics:
      # remove to disable default topic
     #  pose:
     #    frequency: 10 # Hz
-    #  odom:
-    #    frequency: 20 # Hz
     #  status:
     #    frequency: 1 # Hz
     custom_topics: 
-     status_simple:
-       frequency: 1 # Hz
-       vars: ["pm.vbatMV","supervisor.info"]
-    #  ctrltargetZ:
-    #    frequency: 10 # Hz
-    #    vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z","ctrltargetZ.yaw"]
-     pose_simple:
-       frequency: 10 # Hz
-       vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimateZ.quat"] # check crazyflie-firmware/src/modules/interface/quatcompress.h
-    #  twist_simple:
-    #    frequency: 10 # Hz
-    #    vars: ["stateEstimateZ.vx", "stateEstimateZ.vy", "stateEstimateZ.vz","stateEstimateZ.rateRoll","stateEstimateZ.ratePitch","stateEstimateZ.rateYaw"]
+      status_simple:
+        frequency: 1 # Hz
+        vars: ["pm.vbatMV","supervisor.info"]
+      ctrltargetZ:
+        frequency: 50 # Hz
+        vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z"]
+      pose_simple:
+        frequency: 50 # Hz
+        vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimateZ.quat"] # check crazyflie-firmware/src/modules/interface/quatcompress.h
+      twist_simple:
+        frequency: 50 # Hz
+        vars: ["stateEstimateZ.vx", "stateEstimateZ.vy", "stateEstimateZ.vz","stateEstimateZ.rateRoll","stateEstimateZ.ratePitch","stateEstimateZ.rateYaw"]
   # firmware parameters for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
   firmware_params:
