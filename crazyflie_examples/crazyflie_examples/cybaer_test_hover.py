@@ -9,10 +9,10 @@ def main():
     #dX = 0.6*0;
     #dY = -0.6*0;
     #dZ = -0.4*0;
-    dX = 1.0*0;
+    dX = 1.0;
     dY = -1.0*0;
     dZ = 1.0*0;
-    dYaw = np.pi/2.0;
+    dYaw = np.pi/2.0*0;
     dT = 2.0;
     nreps = 3;
     
@@ -45,7 +45,7 @@ def main():
     cf.land(targetHeight=0.04, duration=1.0+Z)
     timeHelper.sleep(1.0+Z)
 
-    # enable logging to SD card if present (assuming disabled before)
+    # disable logging to SD card if present (assuming enabled before)
     cf.setParam('usd.logging',0)
     timeHelper.sleep(1.0)
 
