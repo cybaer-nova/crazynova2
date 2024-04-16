@@ -1,0 +1,49 @@
+1     # version
+4096  # buffer size in bytes
+log   # file name
+0     # enable on startup (0/1)
+on:fixedFrequency
+250   # frequency
+1     # mode (0: disabled, 1: synchronous stabilizer, 2: asynchronous)
+stateEstimateZ.x
+stateEstimateZ.y
+stateEstimateZ.z
+stateEstimateZ.vx
+stateEstimateZ.vy
+stateEstimateZ.vz
+stateEstimateZ.ax
+stateEstimateZ.ay
+stateEstimateZ.az
+stateEstimateZ.quat
+stateEstimateZ.rateroll
+stateEstimateZ.ratepitch
+stateEstimateZ.rateyaw
+ctrltargetZ.x
+ctrltargetZ.y
+ctrltargetZ.z
+ctrltargetZ.vx
+ctrltargetZ.vy
+ctrltargetZ.vz
+ctrltargetZ.ax
+ctrltargetZ.ay
+ctrltargetZ.az
+ctrltarget.yaw
+motor.m1
+motor.m2
+motor.m3
+motor.m4
+gyro.x
+gyro.y
+gyro.z
+acc.ax
+acc.ay
+acc.az
+mag.x
+mag.y
+mag.z
+baro.asl
+baro.temp
+baro.pressure
+lighthouse.x
+lighthouse.y
+lighthouse.z

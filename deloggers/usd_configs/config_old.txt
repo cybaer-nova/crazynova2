@@ -1,0 +1,41 @@
+1     # version
+4096  # buffer size in bytes
+log   # file name
+0     # enable on startup (0/1)
+on:estPose
+stateEstimate.x
+stateEstimate.y
+stateEstimate.z
+stateEstimate.vx
+stateEstimate.vy
+stateEstimate.vz
+stateEstimate.ax
+stateEstimate.ay
+stateEstimate.az
+stateEstimate.roll
+stateEstimate.pitch
+stateEstimate.yaw
+stateEstimate.qx
+stateEstimate.qy
+stateEstimate.qz
+stateEstimate.qw
+on:estPosition
+lighthouse.x
+lighthouse.y
+lighthouse.z
+on:estGyroscope
+gyro.x
+gyro.y
+gyro.z
+on:estAcceleration
+acc.x
+acc.y
+acc.z
+on:estBarometer
+baro.asl
+baro.temp
+baro.pressure
+on:estMagnetometer
+mag.x
+mag.y
+mag.z

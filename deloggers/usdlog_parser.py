@@ -5,46 +5,44 @@ decoded custom sensor data from crazyflie
 """
 import cfusdlog
 import matplotlib.pyplot as plt
-import re
 import argparse
 import csv
 import numpy as np
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("inputlog")
-parser.add_argument("outputcsv")
 args = parser.parse_args()
 
-# decode binary log data
-logData = cfusdlog.decode(args.inputlog)
+if os.path.isdir(args.inputlog):
+    # find all files in the directory that dont end with ".csv" and maintain full path
+    logfiles = [os.path.join(args.inputlog, f) for f in os.listdir(args.inputlog) if os.path.isfile(os.path.join(args.inputlog, f)) and not f.endswith(".csv")]
+else:
+    logfiles = [args.inputlog]
 
-# prepare csv file
-csvfile = open(args.outputcsv,'w', newline='')
-#csvwriter = csv.writer(csvfile)
+for (idx,file) in enumerate(logfiles):
+    print("[Crazyflie uSD dellogger] Found log file",idx+1,"/",len(logfiles),":",file)
+    # decode binary log data
+    logData = cfusdlog.decode(file)
+    # prepare csv file
+    outputcsv = os.path.splitext(file)[0] + '.csv'
+    csvfile = open(outputcsv,'w', newline='')
+    #only focus on regular logging
+    logData = logData['fixedFrequency']
+    # get keys in current dataset
+    keys = list(logData.keys())
+    # print("[Crazyflie uSD dellogger] available keys:",keys)
+    cvswriter = csv.DictWriter(csvfile, fieldnames=keys)
+    cvswriter.writeheader()
+    values = np.array(list(logData.values()))
+    table = values.transpose()
+    for row in table:
+        cvswriter.writerow(dict(zip(keys,row)))
 
-#only focus on regular logging
-logData = logData['fixedFrequency']
-# print(logData)
+    csvfile.close()    
+    print("[Crazyflie uSD dellogger] Writing log data to: ",outputcsv)
 
-# let's see which keys exists in current data set
-keys = list(logData.keys())
-# keys = []
-# for k, v in logData.items():
-#     keys.append(k)
+print("[Crazyflie uSD dellogger] All files processed.")
 
-print("keys:",keys)
-cvswriter = csv.DictWriter(csvfile, fieldnames=keys)
-cvswriter.writeheader()
+    
 
-values = np.array(list(logData.values()))
-table = values.transpose()
-# print("table:",table)
-
-for row in table:
-    # print("row:",row)
-    cvswriter.writerow(dict(zip(keys,row)))
-
-# for k, v in logData.items():
-#     csvwriter.writerow(v)
-
-csvfile.close()
