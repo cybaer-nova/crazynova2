@@ -36,9 +36,9 @@ def main():
     rate = 30.0
     Z = 1.0
 
-    # enable logging to SD card if present (assuming disabled before)
-    cf.setParam('usd.logging',1)
-    timeHelper.sleep(1.0)
+    # # enable logging to SD card if present (assuming disabled before)
+    # cf.setParam('usd.logging',1)
+    # timeHelper.sleep(1.0)
 
     cf.takeoff(targetHeight=Z, duration=Z+1.0)
     timeHelper.sleep(Z+2.0)
@@ -52,9 +52,9 @@ def main():
     cf.land(targetHeight=0.03, duration=Z+1.0)
     timeHelper.sleep(Z+2.0)
 
-    # disable logging to SD card if present (assuming enabled before)
-    cf.setParam('usd.logging',0)
-    timeHelper.sleep(1.0)
+    # # disable logging to SD card if present (assuming enabled before)
+    # cf.setParam('usd.logging',0)
+    # timeHelper.sleep(1.0)
 
 
 if __name__ == '__main__':

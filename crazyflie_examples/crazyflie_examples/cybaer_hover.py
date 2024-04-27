@@ -20,9 +20,9 @@ def main():
     timeHelper = swarm.timeHelper
     cf = swarm.allcfs.crazyflies[0]
 
-    # enable logging to SD card if present (assuming disabled before)
-    cf.setParam('usd.logging',1)
-    timeHelper.sleep(1.0)
+    # # enable logging to SD card if present (assuming disabled before)
+    # cf.setParam('usd.logging',1)
+    # timeHelper.sleep(1.0)
 
     cf.takeoff(targetHeight=Z, duration=1.0+Z)
     timeHelper.sleep(2+Z)
@@ -45,9 +45,9 @@ def main():
     cf.land(targetHeight=0.04, duration=1.0+Z)
     timeHelper.sleep(1.0+Z)
 
-    # disable logging to SD card if present (assuming enabled before)
-    cf.setParam('usd.logging',0)
-    timeHelper.sleep(1.0)
+    # # disable logging to SD card if present (assuming enabled before)
+    # cf.setParam('usd.logging',0)
+    # timeHelper.sleep(1.0)
 
 
 if __name__ == '__main__':
