@@ -6,24 +6,32 @@ from crazyflie_py import Crazyswarm
 from crazyflie_py.uav_trajectory import Trajectory
 import numpy as np
 
-
-def executeTrajectory(timeHelper, cf, traj, rate=100, offset=np.zeros(3)):
+def executeInfTrajectory(timeHelper, cf, traj, rate=100, offset=np.zeros(3), nloops=1):
     
     start_time = timeHelper.time()
-    while not timeHelper.isShutdown():
-        t = timeHelper.time() - start_time
-        if t > traj.duration:
+    for i_loop in range(nloops):
+        status = cf.get_status()
+        print(f'pm state : {status["pm_state"]}, battery: {status["battery"]}')
+        if not status['pm_state'] == 0:
             break
+        
+        print(f'Trajectory loop {i_loop+1} of {nloops}.')
 
-        e = traj.eval(t)
-        cf.cmdFullState(
-            e.pos + np.array(cf.initialPosition) + offset,
-            e.vel,
-            e.acc,
-            e.yaw,
-            e.omega)
+        while not timeHelper.isShutdown():
+            t_total = timeHelper.time() - start_time
+            if t_total > (i_loop+1)*traj.duration:
+                break
 
-        timeHelper.sleepForRate(rate)
+            t = t_total % traj.duration
+            e = traj.eval(t)
+            cf.cmdFullState(
+                e.pos + np.array(cf.initialPosition) + offset,
+                e.vel,
+                e.acc,
+                e.yaw,
+                e.omega)
+            
+            timeHelper.sleepForRate(rate)
 
 
 def main():
@@ -36,7 +44,7 @@ def main():
 
     rate = 30.0
     Z = 1.0
-    Nloops = 10
+    Nloops = 2
     offset=np.array([0, 0, Z])
 
     # # enable logging to SD card if present (assuming disabled before)
@@ -49,19 +57,16 @@ def main():
     timeHelper.sleep(Z+2.0)
     pos = np.array(cf.initialPosition) + offset
     cf.goTo(pos, 0, 2.0)
+    timeHelper.sleep(Z+2.0)
 
-    # fly figure8 until battery is low or Nloops times
-    loop_counter = 0
-    # status = cf.get_status()
-    while loop_counter < Nloops: # and status['pm_state'] == 0:
-        loop_counter += 1
-        print(f'Trajectory repeat number {loop_counter} of maximum {Nloops} loops.')
-        executeTrajectory(timeHelper, cf, traj1, rate, offset)
-        # status = cf.get_status()
-        # print(f'pm state : {status["pm_state"]}, battery left : {status["battery"]}')
+    # fly traj until battery is low or Nloops times
+    executeInfTrajectory(timeHelper, cf, traj1, rate, offset, Nloops)
     
     print('landing')
     cf.notifySetpointsStop()
+    pos = np.array(cf.initialPosition) + offset
+    cf.goTo(pos, 0, 2.0)
+    timeHelper.sleep(Z+2.0)
     cf.land(targetHeight=0.03, duration=Z+1.0)
     timeHelper.sleep(Z+2.0)
 

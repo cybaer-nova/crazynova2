@@ -11,12 +11,12 @@ robots:
     initial_position: [-0.3, 0.3, 0]
     type: cf21_lighthouse  # see robot_types
   cf3:
-    enabled: false
+    enabled: true
     uri: radio://0/30/2M/E7E7E7E703
     initial_position: [0, 0.3, 0]
     type: cf21_lighthouse  # see robot_types
   cf4:
-    enabled: true
+    enabled: false
     uri: radio://0/40/2M/E7E7E7E704
     initial_position: [0, 0, 0]
     type: cf21_lighthouse  # see robot_types
@@ -75,26 +75,26 @@ all:
   # firmware logging for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
   firmware_logging:
-    enabled: false
-    #default_topics:
-     # remove to disable default topic
-    #  pose:
-    #    frequency: 10 # Hz
-    #  status:
-    #    frequency: 1 # Hz
-    custom_topics: 
-      status_simple:
+    enabled: true
+    default_topics:
+    # remove to disable default topic
+      pose:
+        frequency: 10 # Hz
+      status:
         frequency: 1 # Hz
-        vars: ["pm.vbatMV","supervisor.info"]
-      ctrltargetZ:
-        frequency: 20 # Hz
-        vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z"]
-      pose_simple:
-        frequency: 20 # Hz
-        vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimateZ.quat"] # check crazyflie-firmware/src/modules/interface/quatcompress.h
-      twist_simple:
-        frequency: 20 # Hz
-        vars: ["stateEstimateZ.vx", "stateEstimateZ.vy", "stateEstimateZ.vz","stateEstimateZ.rateRoll","stateEstimateZ.ratePitch","stateEstimateZ.rateYaw"]
+    # custom_topics: 
+    #   status_simple:
+    #     frequency: 1 # Hz
+    #     vars: ["pm.vbatMV","supervisor.info"]
+    #   ctrltargetZ:
+    #     frequency: 20 # Hz
+    #     vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z"]
+    #   pose_simple:
+    #     frequency: 20 # Hz
+    #     vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimateZ.quat"] # check crazyflie-firmware/src/modules/interface/quatcompress.h
+    #   twist_simple:
+    #     frequency: 20 # Hz
+    #     vars: ["stateEstimateZ.vx", "stateEstimateZ.vy", "stateEstimateZ.vz","stateEstimateZ.rateRoll","stateEstimateZ.ratePitch","stateEstimateZ.rateYaw"]
   # firmware parameters for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
   firmware_params:
