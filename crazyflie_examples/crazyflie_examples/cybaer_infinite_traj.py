@@ -15,6 +15,11 @@ def executeInfTrajectory(timeHelper, cf, traj, rate=100, offset=np.zeros(3), nlo
         if not status['pm_state'] == 0:
             break
         
+        pose = cf.get_pose()
+        print("pose = ",pose)
+        print("status = ",status)
+        # print(f'pos= [{pose["px"]},{pose["py"]},{pose["pz"]}], quat = [{pose["qx"]},{pose["qy"]},{pose["qz"]},{pose["qw"]}].')
+
         print(f'Trajectory loop {i_loop+1} of {nloops}.')
 
         while not timeHelper.isShutdown():

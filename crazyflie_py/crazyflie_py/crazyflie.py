@@ -17,7 +17,7 @@ from collections import defaultdict
 from crazyflie_interfaces.msg import FullState, Position, Status, TrajectoryPolynomialPiece
 from crazyflie_interfaces.srv import GoTo, Land,\
     NotifySetpointsStop, StartTrajectory, Takeoff, UploadTrajectory
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose
 import numpy as np
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import DescribeParameters, GetParameters, ListParameters, SetParameters
@@ -139,6 +139,9 @@ class Crazyflie:
         self.statusSubscriber = node.create_subscription(
             Status, f'{self.prefix}/status', self.status_topic_callback, 10)
         self.status = {}
+        self.poseSubscriber = node.create_subscription(
+            Pose, f'{self.prefix}/pose', self.pose_topic_callback, 10)
+        self.pose = {}
 
         # Query some settings
         getParamsService = node.create_client(GetParameters, '/crazyflie_server/get_parameters')
@@ -720,6 +723,8 @@ class Crazyflie:
                        'num_tx_broadcast': msg.num_tx_broadcast,
                        'num_rx_unicast': msg.num_rx_unicast,
                        'num_tx_unicast': msg.num_tx_unicast}
+        
+        # self.node.get_logger().info(f'status_topic_callback was called {self.status}')
 
     def get_status(self):
         """
@@ -731,6 +736,37 @@ class Crazyflie:
         """
         # self.node.get_logger().info(f'Crazyflie.get_status() was called {self.status}')
         return self.status
+    
+    def pose_topic_callback(self, msg):
+        """
+        Call back for topic /cfXXX/pose.
+
+        Update the pose attribute every time a crazyflie_interfaces/msg/Pose
+        message is published on the topic /cfXXX/pose
+        """
+
+        pos = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
+        quat = np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
+        lbd = rowan.to_euler(quat)
+
+        self.pose = {   'id': msg.header.frame_id,
+                        'timestamp_sec': msg.header.stamp.sec,
+                        'timestamp_nsec': msg.header.stamp.nanosec,
+                        'p': pos,
+                        'q': quat,
+                        'lbd': lbd}
+        
+        self.node.get_logger().info(f'pose_topic_callback was called {self.pose}')
+
+    def get_pose(self):
+        """
+        Return the pose attribute.
+
+        Pose is a dictionary containing:
+        frame id, timestamp, x,y,z, qx,qy,qz,qw. see crazyflie_interfaces/msg/Pose for details
+        """
+        # self.node.get_logger().info(f'Crazyflie.get_pose() was called {self.pose}')
+        return self.pose
 
 
 class CrazyflieServer(rclpy.node.Node):
