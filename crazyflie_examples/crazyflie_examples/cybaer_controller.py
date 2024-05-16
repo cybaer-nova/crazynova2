@@ -38,6 +38,18 @@ def executeInfTrajectory(timeHelper, cf, traj, rate=100, offset=np.zeros(3), nlo
             
             timeHelper.sleepForRate(rate)
 
+def status_simple_topic_callback(msg):
+    """
+    Call back for topic /cfXXX/status_simple.
+    vars: ["pm.vbatMV","supervisor.info"]
+    """
+    status_simple = {'id': msg.header.frame_id,
+                    'timestamp_sec': msg.header.stamp.sec,
+                    'timestamp_nsec': msg.header.stamp.nanosec,
+                    'supervisor': msg.values[1],
+                    'battery': msg.values[0]}
+    
+    self.get_logger().info(f'status_simple_topic_callback was called {self.status_simple}')
 
 def main():
     swarm = Crazyswarm()
@@ -46,7 +58,7 @@ def main():
 
     cf.statusSimpleSubscriber = cf.create_subscription(
         LogDataGeneric, f'{cf.prefix}/status_simple', status_simple_topic_callback, 10)
-    status = {}
+    status_simple = {}
     cf.get_logger().info(f'subscribed topic: {cf.prefix}/status_simple')
     
     timeHelper.sleep(60.0)
