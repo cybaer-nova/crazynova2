@@ -86,15 +86,15 @@ all:
       status_simple:
         frequency: 1 # Hz
         vars: ["pm.vbatMV","supervisor.info"]
-      ctrltargetZ:
-        frequency: 1 # Hz
-        vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z"]
+      # ctrltargetZ:
+      #   frequency: 20 # Hz
+      #   vars: ["ctrltargetZ.x","ctrltargetZ.y","ctrltargetZ.z"]
       pose_simple:
-        frequency: 1 # Hz
-        vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimate.qx","stateEstimate.qy","stateEstimate.qz","stateEstimate.qw"] 
-        # vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimate.roll","stateEstimate.pitch","stateEstimate.yaw"] 
+        frequency: 20 # Hz
+        vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimate.roll","stateEstimate.pitch","stateEstimate.yaw"]
+        # vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z","stateEstimate.qx","stateEstimate.qy","stateEstimate.qz","stateEstimate.qw"] 
       twist_simple:
-        frequency: 1 # Hz
+        frequency: 20 # Hz
         vars: ["stateEstimateZ.vx", "stateEstimateZ.vy", "stateEstimateZ.vz","stateEstimateZ.rateRoll","stateEstimateZ.ratePitch","stateEstimateZ.rateYaw"]
   # firmware parameters for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
