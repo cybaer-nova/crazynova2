@@ -9,9 +9,18 @@ from crazyflie_interfaces.msg import LogDataGeneric
 import numpy as np
 # import rowan
 
-status = {}
-state = {}
-state_desired = {}
+status = {  'id': 0,
+            'timestamp_sec': 0,
+            'timestamp_nsec': 0,
+            'supervisor': 0,
+            'battery': 0}
+state = {   'id': 0,
+            'timestamp_sec': 0,
+            'timestamp_nsec': 0,
+            'pos': np.zeros(3),
+            'lbd': np.zeros(3),
+            'vel': np.zeros(3),
+            'om': np.zeros(3) }
 
 def status_simple_topic_callback(msg):
     """
@@ -64,6 +73,22 @@ def twist_simple_topic_callback(msg):
     
     # print(f'twist_simple_topic_callback was called {state}')
 
+def getReference(t,pos_start):
+     
+    state_desired = {   'pos': np.zeros(3),
+                        'lbd': np.zeros(3),
+                        'vel': np.zeros(3),
+                        'om': np.zeros(3) }
+
+    if t < 10.0:
+        state_desired["pos"] = pos_start + np.array([0.3,0,0])
+    elif t < 20.0:
+        state_desired["pos"] = pos_start + np.array([-0.3,0,0])
+    else:
+        state_desired["pos"] = pos_start
+    
+    return state_desired
+
 
 def executeControl(timeHelper, cf, rate=20):
     
@@ -71,25 +96,34 @@ def executeControl(timeHelper, cf, rate=20):
     
     global status
     global state
-    global state_desired
-    
-    print(f'controller has state: {state}')
 
-    # # define here controller
-    # ctr_pos = {}
-    # ctr_vel = {}
-    # ctr_acc = {}
-    # ctr_yaw = {}
-    # ctr_omega = {}
+    pos_start = state["pos"]
 
-    # cf.cmdFullState(
-    #     ctr_pos,
-    #     ctr_vel,
-    #     ctr_acc,
-    #     ctr_yaw,
-    #     ctr_omega)
-                
-    timeHelper.sleepForRate(rate)
+    while not timeHelper.isShutdown():
+            t_total = timeHelper.time() - start_time
+            if t_total > 30.0:
+                break
+
+            state_desired = getReference(t_total,pos_start)
+
+            k_pos = 0.1
+            e_pos = state["pos"] - state_desired["pos"]
+
+            # define here controller
+            ctr_pos = np.array([np.nan,np.nan,np.nan])
+            ctr_vel = -k_pos*e_pos
+            ctr_acc = np.array([0.0,0.0,0.0])
+            ctr_yaw = 0
+            ctr_omega = np.array([0.0,0.0,0.0])
+
+            cf.cmdFullState(
+                ctr_pos,
+                ctr_vel,
+                ctr_acc,
+                ctr_yaw,
+                ctr_omega)                
+            
+            timeHelper.sleepForRate(rate)
 
 def main():
     swarm = Crazyswarm()
