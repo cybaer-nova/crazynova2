@@ -8,6 +8,7 @@ from crazyflie_py.uav_trajectory import Trajectory
 from crazyflie_interfaces.msg import LogDataGeneric
 
 import numpy as np
+from scipy import constants as spc
 import csv
 import os
 from datetime import datetime
@@ -97,8 +98,9 @@ def getReference(t,pos_start):
      
     state_desired = {   'ttag': t,
                         'pos_d': np.zeros(3),
-                        'lbd_d': np.zeros(3),
                         'vel_d': np.zeros(3),
+                        'acc_d': np.zeros(3),
+                        'lbd_d': np.zeros(3),
                         'om_d': np.zeros(3) }
 
     dX = 0.7
@@ -140,62 +142,58 @@ def getState():
 
 def doControl(state,state_desired):
 
-    
+    # get desired state
     lbd_d = state_desired["lbd_d"]
     yaw_d = lbd_d[2]
-    
-    # # position controller
-    # ctr_pos = state_desired["pos"]
-    # ctr_vel = np.array([0.0,0.0,0.0])
-    # ctr_acc = np.array([0.0,0.0,0.0])
-    # ctr_yaw = yaw_d
-    # ctr_omega = np.array([0.0,0.0,0.0])
-
-    # # velocity controller in xy
-    # k_pos = 1.5   # 2 is OK but oscillatory, 5 is too high! (rate: 20Hz)
-    # pos = pose["pos"]
-    # pos_d = state_desired["pos"]
-    # e_pos = pos - pos_d
-    # ctr_pos = np.array([np.nan,np.nan,pos_d[2]])
-    # ctr_vel = -k_pos*e_pos
-    # ctr_vel[2] = 0
-    # ctr_acc = np.array([0.0,0.0,0.0])
-    # ctr_yaw = yaw_d
-    # ctr_omega = np.array([0.0,0.0,0.0])
-
-    # # velocity controller
-    # k_pos = 1.5   # 2 is OK but oscillatory, 5 is too high!
-    # pos = pose["pos"]
-    # pos_d = state_desired["pos"]
-    # e_pos = pos - pos_d
-    # ctr_pos = np.array([np.nan,np.nan,np.nan])
-    # ctr_vel = -k_pos*e_pos
-    # ctr_acc = np.array([0.0,0.0,0.0])
-    # ctr_yaw = yaw_d
-    # ctr_omega = np.array([0.0,0.0,0.0])
-
-    # acceleration controller in xy
-    k_p = 3   # 5 is OK, 10 oscilatory (20 Hz)
-    k_d = 3   # 5 OK, 10 too much
-    pos = state["pos"]
     pos_d = state_desired["pos_d"]
-    e_pos = pos - pos_d
-    vel = state["vel"]
     vel_d = state_desired["vel_d"]
+    acc_d = state_desired["acc_d"]
+
+    # get state
+    pos = state["pos"]
+    vel = state["vel"]
+    lbd = state["lbd"]
+    yaw = lbd[2]
+
+    # Controller and vehicle parameters
+    m = 0.032 # [kg] crazyflie has arround 32g of mass 
+    g = np.array([0,0,spc.g])
+    k_p = np.array([1,1,5])   # ?? (20 Hz)
+    k_d = np.array([0.1,0.1,2])   # ??
+    k_yaw = 1 # ??
+    
+    # define control errors (assuming zero yaw)
+    e_pos = pos - pos_d
     e_vel = vel - vel_d
+    e_yaw = yaw - yaw_d*0 # force zero desired yaw
 
-    ctr_pos = np.array([np.nan,np.nan,pos_d[2]])
-    ctr_vel = np.array([np.nan,np.nan,0.0])
-    ctr_acc = -k_p*e_pos - k_d*e_vel
-    ctr_acc[2] = 0.0
-    ctr_yaw = yaw_d
-    ctr_omega = np.array([0.0,0.0,0.0])
+    # comput control action (in acc and convert to [T zB])
+    ctr_acc = -k_p*e_pos - k_d*e_vel + g + acc_d
+    ctr_T = np.linalg.norm(ctr_acc)*m
+    if abs(ctr_T) < 1e-5:
+        ctr_zB = np.zeros(3)
+    else:
+        ctr_zB = m*ctr_acc/ctr_T
+    
+    # get roll and pitch from zB 
+    # for zero yaw, zB = [cos(phi)*sin(theta); -sin(phi) ; cos(phi)*cos(theta)])
+    # for non-zero yaw build desired rotation matriz and extract desired Euler angles
+    ctr_phi = np.arcsin(ctr_zB[1]);
+    ctr_theta = np.arctan(ctr_zB[0]/ctr_zB[2]);
+    ctr_omegaz = -k_yaw*e_yaw;
 
-    ctr = { 'u_pos': ctr_pos,
-            'u_vel': ctr_vel,
+    print('[Crazyflie control] ctr_T = ',ctr_T,'ctr_zB = ',ctr_zB)
+
+    max_T_newtons = m*spc.g*1.0;
+    max_T_units = 60000;
+    ctr = { 'e_pos': e_pos,
+            'e_vel': e_vel,
+            'e_yaw': e_yaw,
             'u_acc': ctr_acc,
-            'u_yaw': ctr_yaw,
-            'u_omega': ctr_omega }
+            'u_T': ctr_T*max_T_units/max_T_newtons,
+            'u_phi': ctr_phi*180.0/np.pi,
+            'u_theta': ctr_theta*180.0/np.pi,
+            'u_omz': ctr_omegaz*180.0/np.pi,}
 
     return ctr
 
@@ -220,13 +218,26 @@ def executeControl(timeHelper,cf,rate,logwriter):
             # TODO if state["supervisor"] OK ...
             ctr = doControl(state,state_desired)
             # else break and exit signaling something went wrong.
+            
+            # limit actuation            
+            np.clip(ctr["u_phi"],-10,10)
+            np.clip(ctr["u_theta"],-10,10)
+            np.clip(ctr["u_omz"],-50,50)
+            np.clip(ctr["u_T"],0.0,2^16)
 
-            cf.cmdFullState(
-                ctr["u_pos"],
-                ctr["u_vel"],
-                ctr["u_acc"],
-                ctr["u_yaw"],
-                ctr["u_omega"])
+            print('[Crazyflie control] ctr = ',ctr)
+
+            cf.cmdVelLegacy(
+                ctr["u_phi"],
+                ctr["u_theta"],
+                ctr["u_omz"],
+                ctr["u_T"])
+            # cf.cmdVelLegacy(
+            #     0.0,
+            #     0.0,
+            #     0.0,
+            #     ctr["u_T"])
+            
             
             # get log dict
             log = getLogDict(state,state_desired,ctr)

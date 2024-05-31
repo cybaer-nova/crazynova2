@@ -17,7 +17,7 @@ from collections import defaultdict
 from crazyflie_interfaces.msg import FullState, Position, Status, TrajectoryPolynomialPiece
 from crazyflie_interfaces.srv import GoTo, Land,\
     NotifySetpointsStop, StartTrajectory, Takeoff, UploadTrajectory
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Twist
 # from geometry_msgs.msg import Point#, Pose
 import numpy as np
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
@@ -140,9 +140,6 @@ class Crazyflie:
         self.statusSubscriber = node.create_subscription(
             Status, f'{self.prefix}/status', self.status_topic_callback, 10)
         self.status = {}
-        # self.poseSubscriber = node.create_subscription(
-        #     Pose, f'{self.prefix}/pose', self.pose_topic_callback, 10)
-        # self.pose = {}
 
         # Query some settings
         getParamsService = node.create_client(GetParameters, '/crazyflie_server/get_parameters')
@@ -179,6 +176,10 @@ class Crazyflie:
 
         # self.cmdVelPublisher = rospy.Publisher(
         #   prefix + '/cmd_vel', geometry_msgs.msg.Twist, queue_size=1)
+
+        self.cmdVelLegacyPublisher = node.create_publisher(
+            Twist, prefix + '/cmd_vel_legacy', 1)
+        self.cmdVelLegacyMsg = Twist()
 
         self.cmdPositionPublisher = node.create_publisher(
             Position, prefix + '/cmd_position', 1)
@@ -660,6 +661,41 @@ class Crazyflie:
     #     msg.linear.z = thrust
     #     self.cmdVelPublisher.publish(msg)
 
+    def cmdVelLegacy(self, roll, pitch, yawrate, thrust):
+        """Sends a streaming command of the 'easy mode' manual control inputs.
+
+        The (absolute roll & pitch, yaw rate, thrust) inputs are typically
+        used for manual flying by beginners or causal pilots, as opposed to the
+        'acrobatic mode' inputs where roll and pitch rates are controlled
+        instead of absolute angles. This mode limits the possible maneuvers,
+        e.g. it is not possible to do a flip because the controller joystick
+        would need to rotate 360 degrees.
+
+        For more information on streaming setpoint commands, see the
+        :meth:`cmdFullState()` documentation.
+
+        !NOTE!: The angles and angular velocities in this command are in
+        degrees, whereas they are in radians for cmdFullState.
+
+        TODO: should we change the name from cmdVel to something else?
+        IMO (japreiss), cmdVel implies controlling linear velocity.
+
+        Args:
+            roll (float): Roll angle. Degrees. Positive values == roll right.
+            pitch (float): Pitch angle. Degrees. Positive values == pitch
+                forward/down.
+            yawrate (float): Yaw angular velocity. Degrees / second. Positive
+                values == turn counterclockwise.
+            thrust (float): Thrust magnitude. Non-meaningful units in [0, 2^16),
+                where the maximum value corresponds to maximum thrust.
+        """
+
+        self.cmdVelLegacyMsg.linear.x = pitch
+        self.cmdVelLegacyMsg.linear.y = roll
+        self.cmdVelLegacyMsg.angular.z = yawrate
+        self.cmdVelLegacyMsg.linear.z = thrust
+        self.cmdVelLegacyPublisher.publish(self.cmdVelLegacyMsg)
+
     def cmdPosition(self, pos, yaw=0.):
         """
         Send a streaming command of absolute position and yaw setpoint.
@@ -737,37 +773,6 @@ class Crazyflie:
         """
         # self.node.get_logger().info(f'Crazyflie.get_status() was called {self.status}')
         return self.status
-    
-    # def pose_topic_callback(self, msg):
-    #     """
-    #     Call back for topic /cfXXX/pose.
-
-    #     Update the pose attribute every time a crazyflie_interfaces/msg/Pose
-    #     message is published on the topic /cfXXX/pose
-    #     """
-
-    #     pos = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
-    #     quat = np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
-    #     lbd = rowan.to_euler(quat)
-
-    #     self.pose = {   'id': msg.header.frame_id,
-    #                     'timestamp_sec': msg.header.stamp.sec,
-    #                     'timestamp_nsec': msg.header.stamp.nanosec,
-    #                     'p': pos,
-    #                     'q': quat,
-    #                     'lbd': lbd}
-        
-    #     self.node.get_logger().info(f'pose_topic_callback was called {self.pose}')
-
-    # def get_pose(self):
-    #     """
-    #     Return the pose attribute.
-
-    #     Pose is a dictionary containing:
-    #     frame id, timestamp, x,y,z, qx,qy,qz,qw. see crazyflie_interfaces/msg/Pose for details
-    #     """
-    #     # self.node.get_logger().info(f'Crazyflie.get_pose() was called {self.pose}')
-    #     return self.pose
 
 
 class CrazyflieServer(rclpy.node.Node):

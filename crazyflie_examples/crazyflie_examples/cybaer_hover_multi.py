@@ -43,7 +43,7 @@ def main():
     
     for irep in range(nreps):
         for iCF in range(nCFs):
-            posi = np.array(CFs[iCF].initialPosition) + np.array([dX,dY,Z+0.1*iCF+dZ])
+            posi = np.array(CFs[iCF].initialPosition) + np.array([dX,dY,Z+0.2*iCF+dZ])
             CFs[iCF].goTo(posi, dYaw, dT)
             timeHelper.sleep(dTsmall)
         timeHelper.sleep(3.0)
