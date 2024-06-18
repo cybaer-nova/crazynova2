@@ -102,15 +102,25 @@ def getReference(t,pos_start):
                         'acc_d': np.zeros(3),
                         'lbd_d': np.zeros(3),
                         'om_d': np.zeros(3) }
+    
+    pos_land = pos_start
+    pos_land[2] = 0.1
+    pos_hover = pos_start + np.array([0.0,0.0,0.5])
 
-    dX = 0.7
+    dX = 0.3*0
+    dY = 0.3*0
+    dZ = 0.3
 
-    if t < 10.0:
-        state_desired["pos_d"] = pos_start + np.array([dX,0,0])
-    elif t < 20.0:
-        state_desired["pos_d"] = pos_start + np.array([-dX,0,0])
+    if t < 3.0:
+        state_desired["pos_d"] = pos_hover
+    # elif t < 10.0:
+    #     state_desired["pos_d"] = pos_hover + np.array([dX,dY,dZ])
+    # elif t < 15.0:
+    #     state_desired["pos_d"] = pos_hover + np.array([-dX,-dY,-dZ])
+    elif t < 6.0:
+        state_desired["pos_d"] = pos_hover
     else:
-        state_desired["pos_d"] = pos_start
+        state_desired["pos_d"] = pos_land
     
     return state_desired
 
@@ -130,7 +140,7 @@ def getState():
     # Bit 5 = is tumbled - the Crazyflie is up side down. 
     # Bit 6 = is locked - the Crazyflie is in the locked state and must be restarted.
 
-    state = {   'ttag': pose["pos"],
+    state = {   'ttag': pose["ttag"],
                 'pos': pose["pos"],
                 'lbd': pose["lbd"],
                 'vel': twist["vel"],
@@ -158,45 +168,61 @@ def doControl(state,state_desired):
     # Controller and vehicle parameters
     m = 0.032 # [kg] crazyflie has arround 32g of mass 
     g = np.array([0,0,spc.g])
-    k_p = np.array([1,1,5])   # ?? (20 Hz)
-    k_d = np.array([0.1,0.1,2])   # ??
-    k_yaw = 1 # ??
+    k_p = np.array([5,5,10])   # ?? (20 Hz)
+    k_d = np.array([1,1,10])   # ??
+    k_yaw = 5.0 # ??
     
     # define control errors (assuming zero yaw)
     e_pos = pos - pos_d
     e_vel = vel - vel_d
-    e_yaw = yaw - yaw_d*0 # force zero desired yaw
+    e_yaw = yaw - yaw_d # force zero desired yaw
 
-    # comput control action (in acc and convert to [T zB])
+    # compute control action (in acc and convert to [T zB])
     ctr_acc = -k_p*e_pos - k_d*e_vel + g + acc_d
-    ctr_T = np.linalg.norm(ctr_acc)*m
-    if abs(ctr_T) < 1e-5:
-        ctr_zB = np.zeros(3)
+    ctr_T_N = np.linalg.norm(ctr_acc)*m
+    hover_T_newtons = m*spc.g
+    hover_T_units = 36300.0 # hover around 36300
+    ctr_T = ctr_T_N*hover_T_units/hover_T_newtons
+    # max_T_newtons = m*spc.g*1.5
+    # max_T_units = 60000.0
+    # ctr_T = ctr_T_N*max_T_units/max_T_newtons
+    
+
+    if abs(ctr_T_N) < 1e-5:
+        ctr_zB = np.array([0,0,1.0])
     else:
-        ctr_zB = m*ctr_acc/ctr_T
+        ctr_zB = m*ctr_acc/ctr_T_N
     
     # get roll and pitch from zB 
     # for zero yaw, zB = [cos(phi)*sin(theta); -sin(phi) ; cos(phi)*cos(theta)])
     # for non-zero yaw build desired rotation matriz and extract desired Euler angles
-    ctr_phi = np.arcsin(ctr_zB[1]);
+    ctr_phi = -np.arcsin(ctr_zB[1]);
     ctr_theta = np.arctan(ctr_zB[0]/ctr_zB[2]);
-    ctr_omegaz = -k_yaw*e_yaw;
+    ctr_omegaz = k_yaw*e_yaw;
 
     print('[Crazyflie control] ctr_T = ',ctr_T,'ctr_zB = ',ctr_zB)
 
-    max_T_newtons = m*spc.g*1.0;
-    max_T_units = 60000;
     ctr = { 'e_pos': e_pos,
             'e_vel': e_vel,
             'e_yaw': e_yaw,
             'u_acc': ctr_acc,
-            'u_T': ctr_T*max_T_units/max_T_newtons,
+            'u_T': ctr_T,
             'u_phi': ctr_phi*180.0/np.pi,
             'u_theta': ctr_theta*180.0/np.pi,
             'u_omz': ctr_omegaz*180.0/np.pi,}
 
     return ctr
 
+def initVelControl(timeHelper,cf,rate):
+
+    for i in range(2):
+        cf.cmdVelLegacy(
+            0.0,
+            0.0,
+            0.0,
+            0.0)
+        timeHelper.sleepForRate(rate)
+        
 def executeControl(timeHelper,cf,rate,logwriter):
     
     start_time = timeHelper.time()
@@ -209,7 +235,7 @@ def executeControl(timeHelper,cf,rate,logwriter):
 
     while not timeHelper.isShutdown():
             t_total = timeHelper.time() - start_time
-            if t_total > 30.0:
+            if t_total > 9.0:
                 break
 
             state_desired = getReference(t_total,pos_start)
@@ -223,7 +249,7 @@ def executeControl(timeHelper,cf,rate,logwriter):
             np.clip(ctr["u_phi"],-10,10)
             np.clip(ctr["u_theta"],-10,10)
             np.clip(ctr["u_omz"],-50,50)
-            np.clip(ctr["u_T"],0.0,2^16)
+            np.clip(ctr["u_T"],0.0,60000.0)
 
             print('[Crazyflie control] ctr = ',ctr)
 
@@ -312,13 +338,13 @@ def main():
     logwriter.writerow(log)
     print("[Crazyflie control] log data fields: ",fields)
 
-    # takeoff and go to initial position
-    print('[Crazyflie control] Takeoff')
-    cf.takeoff(targetHeight=Z, duration=Z+dT)
-    timeHelper.sleep(Z+dT)
-    pos = np.array(cf.initialPosition) + offset
-    cf.goTo(pos, 0, dT)
-    timeHelper.sleep(dT)
+    # # takeoff and go to initial position
+    # print('[Crazyflie control] Takeoff')
+    # cf.takeoff(targetHeight=Z, duration=Z+dT)
+    # timeHelper.sleep(Z+dT)
+    # pos = np.array(cf.initialPosition) + offset
+    # cf.goTo(pos, 0, dT)
+    # timeHelper.sleep(dT)
 
     state = getState()
     state_desired = getReference(0,np.array([0,0,0]))
@@ -327,6 +353,7 @@ def main():
     logwriter.writerow(log)
     
     try:
+        initVelControl(timeHelper,cf,rate)
         exit_code = executeControl(timeHelper,cf,rate,logwriter)
     except Exception as e:
         print('[Crazyflie control] Aborting controller: exception occurred.')
@@ -334,9 +361,9 @@ def main():
 
     print('[Crazyflie control] RTL')
     cf.notifySetpointsStop()
-    pos = np.array(cf.initialPosition) + offset
-    cf.goTo(pos, 0, dT)
-    timeHelper.sleep(dT)
+    # pos = np.array(cf.initialPosition) + offset
+    # cf.goTo(pos, 0, dT)
+    # timeHelper.sleep(dT)
     
     state = getState()
     state_desired = getReference(0,np.array([0,0,0]))
@@ -344,9 +371,9 @@ def main():
     log = getLogDict(state,state_desired,ctr)
     logwriter.writerow(log)
 
-    print('[Crazyflie control] Landing')
-    cf.land(targetHeight=0.03, duration=Z+dT)
-    timeHelper.sleep(Z+dT)
+    # print('[Crazyflie control] Landing')
+    # cf.land(targetHeight=0.03, duration=Z+dT)
+    # timeHelper.sleep(Z+dT)
     
     state = getState()
     state_desired = getReference(0,np.array([0,0,0]))

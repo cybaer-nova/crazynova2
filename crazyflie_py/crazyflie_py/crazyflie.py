@@ -696,6 +696,8 @@ class Crazyflie:
         self.cmdVelLegacyMsg.linear.z = thrust
         self.cmdVelLegacyPublisher.publish(self.cmdVelLegacyMsg)
 
+        # self.node.get_logger().info(f'cmdVelLegacy publisher was called {self.cmdVelLegacyMsg}')
+
     def cmdPosition(self, pos, yaw=0.):
         """
         Send a streaming command of absolute position and yaw setpoint.
