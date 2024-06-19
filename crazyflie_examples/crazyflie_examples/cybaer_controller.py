@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import traceback
-# from pathlib import Path
 
 from crazyflie_py import Crazyswarm
 from crazyflie_py.uav_trajectory import Trajectory
@@ -12,20 +11,12 @@ from scipy import constants as spc
 import csv
 import os
 from datetime import datetime
-# import rowan
 
 status = {  'id': 0,
             'timestamp_sec': 0,
             'timestamp_nsec': 0,
             'supervisor': 0,
             'battery': 0}
-# state = {   'id': 0,
-#             'timestamp_sec': 0,
-#             'timestamp_nsec': 0,
-#             'pos': np.zeros(3),
-#             'lbd': np.zeros(3),
-#             'vel': np.zeros(3),
-#             'om': np.zeros(3) }
 pose = {   'id': 0,
             'timestamp_sec': 0,
             'timestamp_nsec': 0,
@@ -38,7 +29,102 @@ twist = {   'id': 0,
             'om': np.zeros(3) }
 
 
-# fields = ['ttag_ros','time','px','py','pz','vx','vy','vz','phi','theta','psi','omx','omy','omz','pxd','pyd','pzd','vxd','vyd','vzd','u_px','u_py','u_pz','u_vx','u_vy','u_vz','u_ax','u_ay','u_az','u_psi','batt','supervisor']
+T_final = 23 # max time of trajectory
+group_str = 'group0' # name of group for logging files
+
+def getReference(t,pos_start):
+     
+    state_desired = {   'ttag': t,
+                        'pos_d': np.zeros(3),
+                        'vel_d': np.zeros(3),
+                        'acc_d': np.zeros(3),
+                        'lbd_d': np.zeros(3),
+                        'om_d': np.zeros(3) }
+    
+    pos_land = pos_start
+    pos_land[2] = 0.1
+    pos_hover = pos_start + np.array([0.0,0.0,0.5])
+
+    dX = 0.2
+    dY = 0.2
+    dZ = 0.2
+
+    if t < 5.0:
+        state_desired["pos_d"] = pos_hover
+    elif t < 10.0:
+        state_desired["pos_d"] = pos_hover + np.array([dX,dY,dZ])
+    elif t < 15.0:
+        state_desired["pos_d"] = pos_hover + np.array([-dX,-dY,-dZ])
+    elif t < 20.0:
+        state_desired["pos_d"] = pos_hover
+    else:
+        state_desired["pos_d"] = pos_land
+    
+    return state_desired
+
+def doControl(state,state_desired):
+
+    # get desired state
+    lbd_d = state_desired["lbd_d"]
+    yaw_d = lbd_d[2]
+    pos_d = state_desired["pos_d"]
+    vel_d = state_desired["vel_d"]
+    acc_d = state_desired["acc_d"]
+
+    # get state
+    pos = state["pos"]
+    vel = state["vel"]
+    lbd = state["lbd"]
+    yaw = lbd[2]
+
+    # Controller and vehicle parameters
+    m = 0.032 # [kg] crazyflie has arround 32g of mass 
+    g = np.array([0,0,spc.g])
+    k_p = np.array([5,5,10])   # ?? (20 Hz)
+    k_d = np.array([1,1,10])   # ??
+    k_yaw = 5.0 # ??
+    
+    # define control errors (assuming zero yaw)
+    e_pos = pos - pos_d
+    e_vel = vel - vel_d
+    e_yaw = yaw - yaw_d # force zero desired yaw
+
+    # compute control action (in acc and convert to [T zB])
+    ctr_acc = -k_p*e_pos - k_d*e_vel + g + acc_d
+    ctr_T_N = np.linalg.norm(ctr_acc)*m
+    hover_T_newtons = m*spc.g
+    hover_T_units = 36300.0 # hover around 36300
+    ctr_T = ctr_T_N*hover_T_units/hover_T_newtons
+    # max_T_newtons = m*spc.g*1.5
+    # max_T_units = 60000.0
+    # ctr_T = ctr_T_N*max_T_units/max_T_newtons
+    
+
+    if abs(ctr_T_N) < 1e-5:
+        ctr_zB = np.array([0,0,1.0])
+    else:
+        ctr_zB = m*ctr_acc/ctr_T_N
+    
+    # get roll and pitch from zB 
+    # for zero yaw, zB = [cos(phi)*sin(theta); -sin(phi) ; cos(phi)*cos(theta)])
+    # for non-zero yaw build desired rotation matriz and extract desired Euler angles
+    ctr_phi = -np.arcsin(ctr_zB[1]);
+    ctr_theta = np.arctan(ctr_zB[0]/ctr_zB[2]);
+    ctr_omegaz = k_yaw*e_yaw;
+
+    # print('[Crazyflie control] ctr_T = ',ctr_T,'ctr_zB = ',ctr_zB)
+
+    ctr = { 'e_pos': e_pos,
+            'e_vel': e_vel,
+            'e_yaw': e_yaw,
+            'u_acc': ctr_acc,
+            'u_T': ctr_T,
+            'u_phi': ctr_phi*180.0/np.pi,
+            'u_theta': ctr_theta*180.0/np.pi,
+            'u_omz': ctr_omegaz*180.0/np.pi,}
+
+    return ctr
+
 
 def getLogDict(state,state_desired,ctrl):
 
@@ -94,37 +180,6 @@ def twist_simple_topic_callback(msg):
     
     # print(f'twist_simple_topic_callback was called {twist}')
 
-def getReference(t,pos_start):
-     
-    state_desired = {   'ttag': t,
-                        'pos_d': np.zeros(3),
-                        'vel_d': np.zeros(3),
-                        'acc_d': np.zeros(3),
-                        'lbd_d': np.zeros(3),
-                        'om_d': np.zeros(3) }
-    
-    pos_land = pos_start
-    pos_land[2] = 0.1
-    pos_hover = pos_start + np.array([0.0,0.0,0.5])
-
-    dX = 0.3*0
-    dY = 0.3*0
-    dZ = 0.3
-
-    if t < 3.0:
-        state_desired["pos_d"] = pos_hover
-    # elif t < 10.0:
-    #     state_desired["pos_d"] = pos_hover + np.array([dX,dY,dZ])
-    # elif t < 15.0:
-    #     state_desired["pos_d"] = pos_hover + np.array([-dX,-dY,-dZ])
-    elif t < 6.0:
-        state_desired["pos_d"] = pos_hover
-    else:
-        state_desired["pos_d"] = pos_land
-    
-    return state_desired
-
-
 def getState():
     
     global status
@@ -150,69 +205,6 @@ def getState():
 
     return state
 
-def doControl(state,state_desired):
-
-    # get desired state
-    lbd_d = state_desired["lbd_d"]
-    yaw_d = lbd_d[2]
-    pos_d = state_desired["pos_d"]
-    vel_d = state_desired["vel_d"]
-    acc_d = state_desired["acc_d"]
-
-    # get state
-    pos = state["pos"]
-    vel = state["vel"]
-    lbd = state["lbd"]
-    yaw = lbd[2]
-
-    # Controller and vehicle parameters
-    m = 0.032 # [kg] crazyflie has arround 32g of mass 
-    g = np.array([0,0,spc.g])
-    k_p = np.array([5,5,10])   # ?? (20 Hz)
-    k_d = np.array([1,1,10])   # ??
-    k_yaw = 5.0 # ??
-    
-    # define control errors (assuming zero yaw)
-    e_pos = pos - pos_d
-    e_vel = vel - vel_d
-    e_yaw = yaw - yaw_d # force zero desired yaw
-
-    # compute control action (in acc and convert to [T zB])
-    ctr_acc = -k_p*e_pos - k_d*e_vel + g + acc_d
-    ctr_T_N = np.linalg.norm(ctr_acc)*m
-    hover_T_newtons = m*spc.g
-    hover_T_units = 36300.0 # hover around 36300
-    ctr_T = ctr_T_N*hover_T_units/hover_T_newtons
-    # max_T_newtons = m*spc.g*1.5
-    # max_T_units = 60000.0
-    # ctr_T = ctr_T_N*max_T_units/max_T_newtons
-    
-
-    if abs(ctr_T_N) < 1e-5:
-        ctr_zB = np.array([0,0,1.0])
-    else:
-        ctr_zB = m*ctr_acc/ctr_T_N
-    
-    # get roll and pitch from zB 
-    # for zero yaw, zB = [cos(phi)*sin(theta); -sin(phi) ; cos(phi)*cos(theta)])
-    # for non-zero yaw build desired rotation matriz and extract desired Euler angles
-    ctr_phi = -np.arcsin(ctr_zB[1]);
-    ctr_theta = np.arctan(ctr_zB[0]/ctr_zB[2]);
-    ctr_omegaz = k_yaw*e_yaw;
-
-    print('[Crazyflie control] ctr_T = ',ctr_T,'ctr_zB = ',ctr_zB)
-
-    ctr = { 'e_pos': e_pos,
-            'e_vel': e_vel,
-            'e_yaw': e_yaw,
-            'u_acc': ctr_acc,
-            'u_T': ctr_T,
-            'u_phi': ctr_phi*180.0/np.pi,
-            'u_theta': ctr_theta*180.0/np.pi,
-            'u_omz': ctr_omegaz*180.0/np.pi,}
-
-    return ctr
-
 def initVelControl(timeHelper,cf,rate):
 
     for i in range(2):
@@ -235,7 +227,7 @@ def executeControl(timeHelper,cf,rate,logwriter):
 
     while not timeHelper.isShutdown():
             t_total = timeHelper.time() - start_time
-            if t_total > 9.0:
+            if t_total > T_final:
                 break
 
             state_desired = getReference(t_total,pos_start)
@@ -251,7 +243,7 @@ def executeControl(timeHelper,cf,rate,logwriter):
             np.clip(ctr["u_omz"],-50,50)
             np.clip(ctr["u_T"],0.0,60000.0)
 
-            print('[Crazyflie control] ctr = ',ctr)
+            # print('[Crazyflie control] ctr = ',ctr)
 
             cf.cmdVelLegacy(
                 ctr["u_phi"],
@@ -300,7 +292,7 @@ def main():
     Z = 1.0
     dT = 2.0
     offset=np.array([0, 0, Z])
-    do_internal_log = 0
+    do_internal_log = 1
 
     # enable logging to SD card if present (assuming disabled before)
     if do_internal_log:
@@ -323,9 +315,9 @@ def main():
         print('[Crazyflie control] Aborting flight: exception occurred.')
         traceback.print_exc()
         return
-    
+        
     # setting up custom logging to CSV file
-    outputcsv = datetime.today().strftime('%Y%m%dT%H%M%S')+'_CtrlLog.csv'
+    outputcsv = datetime.today().strftime('%Y%m%dT%H%M%S')+'_CtrlLog_' + group_str + '.csv'
     csvfile = open(outputcsv,'w', newline='')
     print("[Crazyflie control] Writing log data to: ",outputcsv)
     fields = list(log.keys())
@@ -337,14 +329,6 @@ def main():
     log = getLogDict(state,state_desired,ctr)
     logwriter.writerow(log)
     print("[Crazyflie control] log data fields: ",fields)
-
-    # # takeoff and go to initial position
-    # print('[Crazyflie control] Takeoff')
-    # cf.takeoff(targetHeight=Z, duration=Z+dT)
-    # timeHelper.sleep(Z+dT)
-    # pos = np.array(cf.initialPosition) + offset
-    # cf.goTo(pos, 0, dT)
-    # timeHelper.sleep(dT)
 
     state = getState()
     state_desired = getReference(0,np.array([0,0,0]))
