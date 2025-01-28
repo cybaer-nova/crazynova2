@@ -29,10 +29,42 @@ twist = {   'id': 0,
             'om': np.zeros(3) }
 
 
-T_final = 23 # max time of trajectory
+T_final = 30 
 group_str = 'group0' # name of group for logging files
 
-def getReference(t,pos_start):
+def getPath(pos_start):
+
+    dt = 5
+    dX = 0.2
+    dY = 0.2
+    dZ = 0.2
+
+    pos_land = pos_start
+    pos_land[2] = 0.1
+    pos_hover = pos_start + np.array([0.0,0.0,0.7])
+
+    waypointList = []
+    dtList = []
+    dtTotal = []
+    waypointList.append(pos_hover)
+    dtList.append(dt)
+    dtTotal.append(sum(dtList))
+    waypointList.append(pos_hover + np.array([dX,dY,dZ]))
+    dtList.append(dt)
+    dtTotal.append(sum(dtList))
+    waypointList.append(pos_hover + np.array([-dX,-dY,-dZ]))
+    dtList.append(dt)
+    dtTotal.append(sum(dtList))
+    waypointList.append(pos_hover)
+    dtList.append(dt)
+    dtTotal.append(sum(dtList))
+    waypointList.append(pos_land)
+    dtList.append(2)
+    dtTotal.append(sum(dtList))
+
+    return waypointList, dtTotal
+
+def getReference(t,waypointList,dtTotal):
      
     state_desired = {   'ttag': t,
                         'pos_d': np.zeros(3),
@@ -41,24 +73,16 @@ def getReference(t,pos_start):
                         'lbd_d': np.zeros(3),
                         'om_d': np.zeros(3) }
     
-    pos_land = pos_start
-    pos_land[2] = 0.1
-    pos_hover = pos_start + np.array([0.0,0.0,0.5])
-
-    dX = 0.2
-    dY = 0.2
-    dZ = 0.2
-
-    if t < 5.0:
-        state_desired["pos_d"] = pos_hover
-    elif t < 10.0:
-        state_desired["pos_d"] = pos_hover + np.array([dX,dY,dZ])
-    elif t < 15.0:
-        state_desired["pos_d"] = pos_hover + np.array([-dX,-dY,-dZ])
-    elif t < 20.0:
-        state_desired["pos_d"] = pos_hover
+    if t < dtTotal[0]:
+        idx = 0
     else:
-        state_desired["pos_d"] = pos_land
+        # find neerest time index
+        tdiffs = (t-np.asarray(dtTotal))
+        best_diff = (tdiffs[tdiffs>=0]).min()
+        idx = np.where(tdiffs==best_diff)[0][0]
+
+    # set desired waypoint
+    state_desired["pos_d"] = waypointList[idx]
     
     return state_desired
 
@@ -125,6 +149,70 @@ def doControl(state,state_desired):
 
     return ctr
 
+def initVelControl(timeHelper,cf,rate):
+
+    for i in range(2):
+        cf.cmdVelLegacy(
+            0.0,
+            0.0,
+            0.0,
+            0.0)
+        timeHelper.sleepForRate(rate)
+
+def executeControl(timeHelper,cf,rate,logwriter):
+    
+    global T_final
+    start_time = timeHelper.time()
+    state = getState()
+    pos_start = state["pos"]
+    exit_code = 0
+    
+    print('[Crazyflie control] Executing controller script...')
+    print('[Crazyflie control] Battery = ',state["batt"],'Supervisor: ',format(state["supervisor"], '08b'))
+
+    waypointList, dtTotal = getPath(pos_start)
+
+    while not timeHelper.isShutdown():
+            t_total = timeHelper.time() - start_time
+            if t_total > max(dtTotal):
+                break
+
+            state_desired = getReference(t_total,waypointList,dtTotal)
+            state = getState()
+
+            # TODO if state["supervisor"] OK ...
+            ctr = doControl(state,state_desired)
+            # else break and exit signaling something went wrong.
+            
+            # limit actuation            
+            np.clip(ctr["u_phi"],-10,10)
+            np.clip(ctr["u_theta"],-10,10)
+            np.clip(ctr["u_omz"],-50,50)
+            np.clip(ctr["u_T"],0.0,59000.0)
+
+            # print('[Crazyflie control] ctr = ',ctr)
+
+            cf.cmdVelLegacy(
+                ctr["u_phi"],
+                ctr["u_theta"],
+                ctr["u_omz"],
+                ctr["u_T"])
+            # cf.cmdVelLegacy(
+            #     0.0,
+            #     0.0,
+            #     0.0,
+            #     ctr["u_T"])
+            
+            
+            # get log dict
+            log = getLogDict(state,state_desired,ctr)
+            logwriter.writerow(log)
+
+            timeHelper.sleepForRate(rate)
+
+    print('[Crazyflie control] Finished controller script. (exit_code = ',exit_code,')')
+
+    return exit_code
 
 def getLogDict(state,state_desired,ctrl):
 
@@ -205,68 +293,6 @@ def getState():
 
     return state
 
-def initVelControl(timeHelper,cf,rate):
-
-    for i in range(2):
-        cf.cmdVelLegacy(
-            0.0,
-            0.0,
-            0.0,
-            0.0)
-        timeHelper.sleepForRate(rate)
-        
-def executeControl(timeHelper,cf,rate,logwriter):
-    
-    start_time = timeHelper.time()
-    state = getState()
-    pos_start = state["pos"]
-    exit_code = 0
-    
-    print('[Crazyflie control] Executing controller script...')
-    print('[Crazyflie control] Battery = ',state["batt"],'Supervisor: ',format(state["supervisor"], '08b'))
-
-    while not timeHelper.isShutdown():
-            t_total = timeHelper.time() - start_time
-            if t_total > T_final:
-                break
-
-            state_desired = getReference(t_total,pos_start)
-            state = getState()
-
-            # TODO if state["supervisor"] OK ...
-            ctr = doControl(state,state_desired)
-            # else break and exit signaling something went wrong.
-            
-            # limit actuation            
-            np.clip(ctr["u_phi"],-10,10)
-            np.clip(ctr["u_theta"],-10,10)
-            np.clip(ctr["u_omz"],-50,50)
-            np.clip(ctr["u_T"],0.0,60000.0)
-
-            # print('[Crazyflie control] ctr = ',ctr)
-
-            cf.cmdVelLegacy(
-                ctr["u_phi"],
-                ctr["u_theta"],
-                ctr["u_omz"],
-                ctr["u_T"])
-            # cf.cmdVelLegacy(
-            #     0.0,
-            #     0.0,
-            #     0.0,
-            #     ctr["u_T"])
-            
-            
-            # get log dict
-            log = getLogDict(state,state_desired,ctr)
-            logwriter.writerow(log)
-
-            timeHelper.sleepForRate(rate)
-
-    print('[Crazyflie control] Finished controller script. (exit_code = ',exit_code,')')
-
-    return exit_code
-
 def main():
     # get CF drone object:
     swarm = Crazyswarm()
@@ -292,7 +318,7 @@ def main():
     Z = 1.0
     dT = 2.0
     offset=np.array([0, 0, Z])
-    do_internal_log = 1
+    do_internal_log = 0
 
     # enable logging to SD card if present (assuming disabled before)
     if do_internal_log:
@@ -306,35 +332,24 @@ def main():
     print('[Crazyflie control] Preparing for takeoff in 3 s...')
     timeHelper.sleep(3.0)
     try:
+        # setting up custom logging to CSV file
+        outputcsv = datetime.today().strftime('%Y%m%dT%H%M%S')+'_CtrlLog_' + group_str + '.csv'
+        csvfile = open(outputcsv,'w', newline='')
+        print("[Crazyflie control] Writing log data to: ",outputcsv)
         state = getState()
-        state_desired = getReference(0,np.array([0,0,0]))
+        state_desired = getReference(0,[np.array([0,0,0])],[0])
         ctr = doControl(state,state_desired)
         log = getLogDict(state,state_desired,ctr)
+        fields = list(log.keys())
+        logwriter = csv.DictWriter(csvfile, fieldnames=fields)
+        logwriter.writeheader()
+        logwriter.writerow(log)
+        # print("[Crazyflie control] log data fields: ",fields)
         print('[Crazyflie control] System checks all OK. Battery = ',state['batt'],'Supervisor: ',format(state['supervisor'], '08b'))
     except Exception as e:
         print('[Crazyflie control] Aborting flight: exception occurred.')
         traceback.print_exc()
         return
-        
-    # setting up custom logging to CSV file
-    outputcsv = datetime.today().strftime('%Y%m%dT%H%M%S')+'_CtrlLog_' + group_str + '.csv'
-    csvfile = open(outputcsv,'w', newline='')
-    print("[Crazyflie control] Writing log data to: ",outputcsv)
-    fields = list(log.keys())
-    logwriter = csv.DictWriter(csvfile, fieldnames=fields)
-    logwriter.writeheader()
-    state = getState()
-    state_desired = getReference(0,np.array([0,0,0]))
-    ctr = doControl(state,state_desired)
-    log = getLogDict(state,state_desired,ctr)
-    logwriter.writerow(log)
-    print("[Crazyflie control] log data fields: ",fields)
-
-    state = getState()
-    state_desired = getReference(0,np.array([0,0,0]))
-    ctr = doControl(state,state_desired)
-    log = getLogDict(state,state_desired,ctr)
-    logwriter.writerow(log)
     
     try:
         initVelControl(timeHelper,cf,rate)
@@ -343,24 +358,10 @@ def main():
         print('[Crazyflie control] Aborting controller: exception occurred.')
         traceback.print_exc()
 
-    print('[Crazyflie control] RTL')
+    # final log entry and close file
     cf.notifySetpointsStop()
-    # pos = np.array(cf.initialPosition) + offset
-    # cf.goTo(pos, 0, dT)
-    # timeHelper.sleep(dT)
-    
     state = getState()
-    state_desired = getReference(0,np.array([0,0,0]))
-    ctr = doControl(state,state_desired)
-    log = getLogDict(state,state_desired,ctr)
-    logwriter.writerow(log)
-
-    # print('[Crazyflie control] Landing')
-    # cf.land(targetHeight=0.03, duration=Z+dT)
-    # timeHelper.sleep(Z+dT)
-    
-    state = getState()
-    state_desired = getReference(0,np.array([0,0,0]))
+    state_desired = getReference(0,[np.array([0,0,0])],[0])
     ctr = doControl(state,state_desired)
     log = getLogDict(state,state_desired,ctr)
     logwriter.writerow(log)

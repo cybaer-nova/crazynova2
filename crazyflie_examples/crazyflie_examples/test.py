@@ -26,8 +26,8 @@ def main():
         #allcfs.takeoff(targetHeight=0.5, duration=2.0)
     for iCF in range(nCFs):
             CFs[iCF].takeoff(targetHeight=0.5+0.2*iCF, duration=1.0+0.5)
-            timeHelper.sleep(2.0)
-    timeHelper.sleep(3.0)
+            timeHelper.sleep(0.5)
+    timeHelper.sleep(2.0)
         
     for icf in range(nCFs): 
             print(allcfs.crazyflies[icf].initialPosition)
@@ -38,7 +38,7 @@ def main():
             CFs[icf].goTo(pos, 0, 2.0)
             timeHelper.sleep(0.5)
 
-    timeHelper.sleep(4.0)
+    timeHelper.sleep(2.0)
 
     for icf in range(nCFs): 
             print(allcfs.crazyflies[icf].initialPosition)
@@ -50,7 +50,7 @@ def main():
             CFs[icf].goTo(pos, 0, 2.0)
             timeHelper.sleep(0.5)
 
-    timeHelper.sleep(4.0)
+    timeHelper.sleep(2.0)
 
         #allcfs.startTrajectory(0, timescale=TIMESCALE)
         #timeHelper.sleep(traj1.duration * TIMESCALE + 2.0)
